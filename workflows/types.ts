@@ -2,17 +2,15 @@ export type LinkedInRoomPipelineInput = {
   audienceRoomId: string;
   enterpriseName?: string;
   model?: string;
-  /** Passed to filter-tiered-posts (default both). */
   filterTier?: "1" | "2" | "both";
-  /** contextual-stimulus-categorization async tiers (default both). */
   stimulusTiers?: "both" | "tier1" | "tier2";
-  /** ground-truth-extraction async tiers (default both). */
   groundTruthTiers?: "both" | "tier1" | "tier2";
-  /** linkedin-initial-prediction tier (default 1). */
   initialPredictionTier?: 1 | 2;
-  /** Seconds between async job status polls (default 15). */
+  sgoTierMode?: "tier1" | "tier2";
+  sgoNumIterations?: number;
+  /** Phase 1: false (i0 only). Set true when SGO is ready. */
+  runSgoPipeline?: boolean;
   pollIntervalSeconds?: number;
-  /** Max seconds to wait per async phase before failing (default 7200). */
   pollTimeoutSeconds?: number;
 };
 
@@ -21,4 +19,10 @@ export type AsyncJobStatusPayload = {
   status: string;
   error?: string | null;
   result?: unknown;
+};
+
+export type ChunkProcessResult = {
+  job_id: string;
+  status: string;
+  needs_continue: boolean;
 };

@@ -33,3 +33,8 @@ export function appendEnterpriseQuery(
     url.searchParams.set("enterpriseName", enterpriseName);
   }
 }
+
+/** Vercel Workflow owns chunk chaining; FastAPI must not HTTP self-trigger. */
+export function appendWorkflowOrchestrated(url: URL): void {
+  url.searchParams.set("workflowOrchestrated", "true");
+}

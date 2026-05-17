@@ -1,56 +1,43 @@
+const ORIGIN = "https://vectorial-sgo-linkedin-testing.vercel.app";
+
 export default function Home() {
   return (
-    <main>
-      <h1>LinkedIn room pipeline (test orchestrator)</h1>
+    <main style={{ maxWidth: 720, margin: "2rem auto", fontFamily: "system-ui" }}>
+      <h1>LinkedIn room pipeline (Vercel Workflow)</h1>
       <p>
-        End-to-end runs start here — same deployment you open in the browser (Workflow +
-        route handlers). Audience-room HTTP calls use <code>getApiUrl()</code> in{" "}
-        <code>lib/fastapi-url.ts</code>.
+        <strong>Deployment:</strong>{" "}
+        <a href={ORIGIN}>{ORIGIN}</a>
+      </p>
+      <p>
+        Phase 1: rebuild → filter → theme → stimulus → ground truth → initial
+        prediction. SGO only if <code>runSgoPipeline: true</code>.
       </p>
 
-      <h2>Configure only this Vercel project</h2>
+      <h2>Backend env on this Vercel project</h2>
       <ul>
         <li>
-          <strong>Default (nothing to set):</strong> On Vercel, workflow steps use the
-          automatic <code>VERCEL_URL</code> host — i.e. <strong>this same deployment URL</strong>.
-          Use this when <code>/api/v1/...</code> and <code>/docs</code> are already served on
-          this deployment.
+          <code>AUDIENCE_BACKEND_REWRITE_TARGET</code> = your Audience Python API
+          (steps call this hostname; <code>/api/v1/*</code> rewrites), or
         </li>
         <li>
-          <strong>Optional proxy (single public URL, API elsewhere):</strong> set{" "}
-          <code>AUDIENCE_BACKEND_REWRITE_TARGET</code> to your Audience API origin (no trailing
-          slash). Then requests from this app to <code>/api/v1/...</code> on{" "}
-          <strong>this</strong> URL are rewritten to that backend. Leave{" "}
-          <code>FASTAPI_URL</code> unset so steps still target this hostname and hit the rewrite.
-        </li>
-        <li>
-          <strong>Optional override:</strong> <code>FASTAPI_URL</code> or{" "}
-          <code>AUDIENCE_BACKEND_URL</code> forces steps to call that origin directly (no rewrite
-          needed for those fetches).
+          <code>FASTAPI_URL</code> / <code>AUDIENCE_BACKEND_URL</code> = call API
+          directly
         </li>
       </ul>
 
-      <p>
-        <code>AUDIENCE_API_BASE_URL</code> is <strong>not</strong> read by this Next app — it
-        belongs to the <strong>Python</strong> Audience service for internal chunk self-POSTs.
-        You do not add it to this project&apos;s env unless you also run that Python code from
-        here (you typically don&apos;t).
-      </p>
+      <h2>Trigger (one call — do not chain FastAPI pipeline URLs)</h2>
+      <pre>
+        {`export ORIGIN="${ORIGIN}"
 
-      <h2>Trigger</h2>
-      <pre>
-        {`curl -sS -X POST \\
-  "$ORIGIN/api/workflows/linkedin-room-pipeline" \\
+curl -sS -X POST "$ORIGIN/api/workflows/linkedin-room-pipeline" \\
   -H "content-type: application/json" \\
-  -d '{"audienceRoomId":"<ROOM_ID>","enterpriseName":"gamma"}'`}
+  -d '{"audienceRoomId":"<ROOM_ID>","enterpriseName":"gamma","runSgoPipeline":false}'`}
       </pre>
-      <h2>Status</h2>
-      <pre>
-        {`curl -sS "$ORIGIN/api/workflows/linkedin-room-pipeline?runId=<RUN_ID>"`}
-      </pre>
+      <pre>{`curl -sS "$ORIGIN/api/workflows/linkedin-room-pipeline?runId=<RUN_ID>"`}</pre>
+
       <p>
-        Example: <code>ORIGIN=https://vectorial-sgo-linkedin-testing.vercel.app</code>. Root
-        directory on Vercel: repo root.
+        See <code>RUNBOOK.md</code> and <code>scripts/smoke-trigger.sh</code>.
+        Redeploy after pulling Phase 1 workflow changes.
       </p>
     </main>
   );

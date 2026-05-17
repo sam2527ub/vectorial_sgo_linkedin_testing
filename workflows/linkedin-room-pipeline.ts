@@ -1,15 +1,20 @@
 import { FatalError, sleep } from "workflow";
-import type { AsyncJobKind } from "@/workflows/steps/linkedin-fastapi-steps";
+import type { AsyncJobStatusPayload, LinkedInRoomPipelineInput } from "@/workflows/types";
+import { runWorkflowChunkedAsyncJob } from "@/workflows/run-chunked-async-job";
 import {
   stepFilterTieredPosts,
   stepGetAsyncJobStatus,
+  stepProcessGroundTruthChunk,
+  stepProcessInitialPredictionChunk,
+  stepProcessSgoChunk,
+  stepProcessStimulusChunk,
   stepRebuildTieredPosts,
   stepTriggerGroundTruth,
   stepTriggerInitialPrediction,
+  stepTriggerSgoPipeline,
   stepTriggerStimulus,
   stepTriggerThemeDiscovery,
 } from "@/workflows/steps/linkedin-fastapi-steps";
-import type { AsyncJobStatusPayload, LinkedInRoomPipelineInput } from "@/workflows/types";
 
 function assertNotSkipped(
   label: string,
@@ -22,37 +27,33 @@ function assertNotSkipped(
   }
 }
 
-async function waitForAsyncJob(
+async function waitForThemeJob(
   input: LinkedInRoomPipelineInput,
   jobId: string,
-  kind: AsyncJobKind,
-  label: string,
 ): Promise<AsyncJobStatusPayload> {
   const intervalSec = input.pollIntervalSeconds ?? 15;
   const timeoutSec = input.pollTimeoutSeconds ?? 7200;
   const maxIterations = Math.max(1, Math.ceil(timeoutSec / intervalSec));
 
   for (let attempt = 0; attempt < maxIterations; attempt++) {
-    const row = await stepGetAsyncJobStatus(input, jobId, kind);
+    const row = await stepGetAsyncJobStatus(input, jobId, "theme");
     const st = String(row.status || "").toUpperCase();
     if (st === "COMPLETED") {
       return row;
     }
     if (st === "FAILED") {
       throw new FatalError(
-        `${label} failed: ${row.error ?? "no error detail"}`,
+        `theme_category_discovery failed: ${row.error ?? "no error detail"}`,
       );
     }
     await sleep(`${intervalSec}s`);
   }
 
-  throw new FatalError(`${label} timed out after ${timeoutSec}s`);
+  throw new FatalError(
+    `theme_category_discovery timed out after ${timeoutSec}s`,
+  );
 }
 
-/**
- * Durable LinkedIn room pipeline: tier rebuild → filter → theme → stimulus →
- * ground truth → initial prediction. Calls Audience FastAPI (FASTAPI_URL).
- */
 export async function linkedinRoomPipelineWorkflow(
   input: LinkedInRoomPipelineInput,
 ): Promise<{
@@ -61,6 +62,7 @@ export async function linkedinRoomPipelineWorkflow(
   stimulus: AsyncJobStatusPayload;
   groundTruth: AsyncJobStatusPayload;
   initialPrediction: AsyncJobStatusPayload;
+  sgo?: AsyncJobStatusPayload;
 }> {
   "use workflow";
 
@@ -75,36 +77,45 @@ export async function linkedinRoomPipelineWorkflow(
   assertNotSkipped("filter-tiered-posts", filtered);
 
   const themeJob = await stepTriggerThemeDiscovery(input);
-  const theme = await waitForAsyncJob(
-    input,
-    themeJob.job_id,
-    "theme",
-    "theme_category_discovery",
-  );
+  const theme = await waitForThemeJob(input, themeJob.job_id);
 
-  const stimulusJob = await stepTriggerStimulus(input);
-  const stimulus = await waitForAsyncJob(
+  const stimulus = await runWorkflowChunkedAsyncJob(
     input,
-    stimulusJob.job_id,
     "stimulus",
     "contextual-stimulus-categorization",
+    () => stepTriggerStimulus(input),
+    (jobId) => stepProcessStimulusChunk(input, jobId),
   );
 
-  const gtJob = await stepTriggerGroundTruth(input);
-  const groundTruth = await waitForAsyncJob(
+  const groundTruth = await runWorkflowChunkedAsyncJob(
     input,
-    gtJob.job_id,
     "ground_truth",
     "ground-truth-extraction",
+    () => stepTriggerGroundTruth(input),
+    (jobId) => stepProcessGroundTruthChunk(input, jobId),
   );
 
-  const i0Job = await stepTriggerInitialPrediction(input);
-  const initialPrediction = await waitForAsyncJob(
+  const initialPrediction = await runWorkflowChunkedAsyncJob(
     input,
-    i0Job.job_id,
     "initial_prediction",
     "linkedin-initial-prediction",
+    () => stepTriggerInitialPrediction(input),
+    (jobId) => stepProcessInitialPredictionChunk(input, jobId),
   );
+
+  const runSgo = input.runSgoPipeline === true;
+  let sgo: AsyncJobStatusPayload | undefined;
+  if (runSgo) {
+    const numIt = Math.max(1, input.sgoNumIterations ?? 5);
+    sgo = await runWorkflowChunkedAsyncJob(
+      input,
+      "sgo",
+      "linkedin-sgo-pipeline",
+      () => stepTriggerSgoPipeline(input),
+      (jobId) => stepProcessSgoChunk(input, jobId),
+      numIt + 4,
+    );
+  }
 
   return {
     audienceRoomId: input.audienceRoomId,
@@ -112,5 +123,6 @@ export async function linkedinRoomPipelineWorkflow(
     stimulus,
     groundTruth,
     initialPrediction,
+    sgo,
   };
 }

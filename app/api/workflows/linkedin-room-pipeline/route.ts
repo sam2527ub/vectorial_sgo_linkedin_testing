@@ -27,6 +27,9 @@ export async function POST(request: Request) {
     stimulusTiers: raw.stimulusTiers,
     groundTruthTiers: raw.groundTruthTiers,
     initialPredictionTier: raw.initialPredictionTier,
+    sgoTierMode: raw.sgoTierMode,
+    sgoNumIterations: raw.sgoNumIterations,
+    runSgoPipeline: raw.runSgoPipeline === true,
     pollIntervalSeconds: raw.pollIntervalSeconds,
     pollTimeoutSeconds: raw.pollTimeoutSeconds,
   };
@@ -35,6 +38,9 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     runId: run.runId,
+    audienceRoomId: input.audienceRoomId,
+    runSgoPipeline: input.runSgoPipeline === true,
+    pipelineThrough: input.runSgoPipeline === true ? "sgo" : "initial_prediction",
     message:
       "Workflow started. Poll GET /api/workflows/linkedin-room-pipeline?runId=…",
   });
